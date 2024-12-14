@@ -1,6 +1,7 @@
 <script lang="ts">
 	import cn from '$lib/cn';
-	import { onMount } from 'svelte';
+	import { BrotliWorkerMessageType, type BrotliWorkerMessage } from '$lib/workers/type';
+	import { onMount, onDestroy } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	let text = '';
@@ -14,35 +15,43 @@
 			const BrotliWorker = await import('$lib/workers/brotliWorker?worker');
 			brotliWorker = new BrotliWorker.default();
 
-			brotliWorker.onmessage = (event) => {
+			brotliWorker.onmessage = (event: MessageEvent<BrotliWorkerMessage>) => {
 				const { type, payload } = event.data;
 
-				if (type === 'compressed') {
+				if (type === BrotliWorkerMessageType.COMPRESSED) {
 					compressedText = payload;
-					url = 'https://' + location.host + location.pathname + '#' + compressedText;
-				} else if (type === 'decompressed') {
+					url = `https://${location.host}${location.pathname}#${compressedText}`;
+				} else if (type === BrotliWorkerMessageType.DECOMPRESSED) {
 					text = payload;
 				} else {
 					console.error('Worker error:', payload);
 				}
 			};
 
-			const initialContent = location.hash.substring(1);
-			if (!initialContent) return;
-			decompress(initialContent);
+			decompressInitialContent()
 		})();
 
 		return () => {
-			brotliWorker.terminate();
+			brotliWorker?.terminate();
 		};
 	});
 
+	onDestroy(() => {
+		brotliWorker?.terminate();
+	})
+
+	function decompressInitialContent() {
+		const initialContent = location.hash.substring(1);
+		if (!initialContent) return;
+		decompress(initialContent);
+	}
+
 	function compress() {
-		brotliWorker.postMessage({ type: 'compress', payload: text });
+		brotliWorker?.postMessage({ type: BrotliWorkerMessageType.COMPRESS, payload: text });
 	}
 
 	function decompress(text?: string) {
-		brotliWorker.postMessage({ type: 'decompress', payload: text ?? compressedText });
+		brotliWorker?.postMessage({ type: BrotliWorkerMessageType.DECOMPRESS, payload: text ?? compressedText });
 	}
 
 	async function copy() {
@@ -56,6 +65,7 @@
 	}
 </script>
 
+<svelte:window on:hashchange={decompressInitialContent} />
 <div class="flex h-screen flex-col">
 	<!-- Textarea wrapper -->
 	<div class="flex-grow">

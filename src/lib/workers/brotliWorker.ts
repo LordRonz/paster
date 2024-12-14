@@ -1,4 +1,5 @@
 import brotliPromise from 'brotli-wasm';
+import { BrotliWorkerMessageType, type BrotliWorkerMessage } from './type';
 
 function base64Encode(arrayBuffer: ArrayBufferLike) {
 	return btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
@@ -14,27 +15,27 @@ function base64Decode(base64String: string) {
 	return bytes;
 }
 
-onmessage = async (event) => {
+onmessage = async (event: MessageEvent<BrotliWorkerMessage>) => {
 	const { type, payload } = event.data;
 
 	const brotli = await brotliPromise;
 
-	if (type === 'compress') {
+	if (type === BrotliWorkerMessageType.COMPRESS) {
 		const encoder = new TextEncoder();
 		const input = encoder.encode(payload);
 
 		const compressed = brotli.compress(input);
 		const compressedBase64 = base64Encode(compressed.buffer);
 
-		self.postMessage({ type: 'compressed', payload: compressedBase64 });
-	} else if (type === 'decompress') {
+		self.postMessage({ type: BrotliWorkerMessageType.COMPRESSED, payload: compressedBase64 });
+	} else if (type === BrotliWorkerMessageType.DECOMPRESS) {
 		const compressedData = base64Decode(payload);
 		console.log(payload, compressedData);
 		const decompressed = brotli.decompress(compressedData);
 		const decoder = new TextDecoder();
 		const originalText = decoder.decode(decompressed);
 
-		self.postMessage({ type: 'decompressed', payload: originalText });
+		self.postMessage({ type: BrotliWorkerMessageType.DECOMPRESSED, payload: originalText });
 	} else {
 		self.postMessage({ type: 'error', payload: 'Unknown operation' });
 	}
